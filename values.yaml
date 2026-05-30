@@ -1,0 +1,279 @@
+# Iris Gateway Test Configuration for Priority-Based Roles
+# This values.yaml is specifically designed to test the priority role selection feature
+
+image:
+  repository: us.icr.io/apptio/iris-gateway
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 8080
+
+metrics:
+  serviceMonitor:
+    enabled: false  # Disabled for local testing
+
+ingress:
+  enabled: false
+
+server:
+  logLevel: "debug"  # Debug level for testing
+  logFormat: "json"
+  refreshInterval: "1h"
+
+gateway:
+  defaultRPS: 60
+  defaultUserRPS: 5
+  maxResponseChars: 50000
+  charsPerToken: 4
+  toolNameNormalization: true
+  baseInstructions: ""
+  upstreamInstructionsModeDefault: "append"
+  
+  # Minimal block list for testing
+  defaultBlockList:
+    - "*write*"
+    - "*delete*"
+
+  # Minimal upstreams for testing
+  upstreams:
+    github:
+      type: github
+      token_env: GITHUB_TOKEN
+      max_per_page: 5
+      block_list:
+        - "add_*"
+      allow_list:
+        - "list_commits"
+        - "get_commit"
+
+  # Agent config pointing to the test repository
+  agentConfig:
+    priority-test:
+      repo: "iris-priority-test"
+      path: "roles"
+      ref: "main"
+
+  # Role permissions with priority testing configuration
+  # Testing scenarios:
+  # 1. Different priority levels (5, 10, 15, 20, 25, 30)
+  # 2. One role without AGENTS.md (role_without_agents) to test common fallback
+  # 3. Multiple roles with same priority to test tie-breaking
+  # 4. Roles with priority 0 (default) for backward compatibility
+  rolePermissions:
+    # High priority role (30) - should win when user has multiple roles
+    prism_engineer:
+      priority: 30
+      upstreams: ["github"]
+      tools: ["*"]
+      groups: ["prism-engineers"]
+      instructions: |
+        You are a Prism platform engineer with elevated access.
+
+    # Priority 25 - high tier
+    high_priority:
+      priority: 25
+      upstreams: ["github"]
+      tools: ["*"]
+      groups: ["high-priority-users"]
+      instructions: |
+        You have high priority access.
+
+    # Priority 20 - standard tier
+    medium_priority:
+      priority: 20
+      upstreams: ["github"]
+      tools: ["*"]
+      groups: ["medium-priority-users"]
+      instructions: |
+        You have medium priority access.
+
+    # Priority 15 - intermediate tier
+    priority_15:
+      priority: 15
+      upstreams: ["github"]
+      tools: ["*"]
+      groups: ["priority-15-users"]
+      instructions: |
+        You have priority 15 access.
+
+    # Priority 10 - basic tier
+    priority_10:
+      priority: 10
+      upstreams: ["github"]
+      tools: ["*"]
+      groups: ["priority-10-users"]
+      instructions: |
+        You have priority 10 access.
+
+    # Priority 5 - lowest explicit priority
+    low_priority:
+      priority: 5
+      upstreams: ["github"]
+      tools: ["*"]
+      groups: ["low-priority-users"]
+      instructions: |
+        You have low priority access.
+
+    # Priority 20 (same as medium_priority) - tests tie-breaking
+    priority_20:
+      priority: 20
+      upstreams: ["github"]
+      tools: ["*"]
+      groups: ["priority-20-users"]
+      instructions: |
+        You have priority 20 access (tie-breaker test).
+
+    # Priority 25 (same as high_priority) - tests tie-breaking
+    priority_25:
+      priority: 25
+      upstreams: ["github"]
+      tools: ["*"]
+      groups: ["priority-25-users"]
+      instructions: |
+        You have priority 25 access (tie-breaker test).
+
+    # Priority 5 (same as low_priority) - tests tie-breaking
+    priority_5:
+      priority: 5
+      upstreams: ["github"]
+      tools: ["*"]
+      groups: ["priority-5-users"]
+      instructions: |
+        You have priority 5 access (tie-breaker test).
+
+    # Role WITHOUT AGENTS.md file - tests common fallback
+    # This role intentionally has no AGENTS.md in the test repo
+    role_without_agents:
+      priority: 15
+      upstreams: ["github"]
+      tools: ["*"]
+      groups: ["no-agents-users"]
+      instructions: |
+        This role has no AGENTS.md file - should fall back to common/AGENTS.md.
+
+    # Roles with priority 0 (default) - backward compatibility test
+    role_a:
+      # No priority field = defaults to 0
+      upstreams: ["github"]
+      tools: ["*"]
+      groups: ["role-a-users"]
+      instructions: |
+        Role A with default priority (0).
+
+    role_b:
+      priority: 0  # Explicit 0
+      upstreams: ["github"]
+      tools: ["*"]
+      groups: ["role-b-users"]
+      instructions: |
+        Role B with explicit priority 0.
+
+    role_c:
+      # No priority field = defaults to 0
+      upstreams: ["github"]
+      tools: ["*"]
+      groups: ["role-c-users"]
+      instructions: |
+        Role C with default priority (0).
+
+    # Common role - always included
+    common:
+      priority: 0  # Common should have lowest priority
+      upstreams: ["github"]
+      tools: ["*"]
+      groups: ["*"]  # All users get common
+      instructions: |
+        Common baseline instructions for all users.
+
+auth:
+  verification:
+    idpUrl: ""
+    issuer: "https://test-issuer.example.com"
+    audience: "iris-gateway-test"
+    jwksUrl: "https://test-issuer.example.com/.well-known/jwks.json"
+  
+  callbackRelay:
+    enabled: false
+
+  resourceMetadata:
+    enabled: false
+
+secrets:
+  existingSecret: "iris-test-credentials"
+
+workload:
+  replicaCount: 1  # Single replica for testing
+  
+  autoscaling:
+    enabled: false  # Disabled for testing
+  
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  
+  terminationGracePeriodSeconds: 15
+  
+  podDisruptionBudget:
+    enabled: false  # Disabled for testing
+  
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  
+  serviceAccount:
+    create: true
+    name: ""
+    annotations: {}
+  
+  podAnnotations: {}
+  
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 10001
+    runAsGroup: 10001
+    seccompProfile:
+      type: RuntimeDefault
+  
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop:
+        - ALL
+    seccompProfile:
+      type: RuntimeDefault
+  
+  probes:
+    startup:
+      httpGet:
+        path: /health
+      failureThreshold: 30
+      periodSeconds: 2
+    liveness:
+      httpGet:
+        path: /health
+      periodSeconds: 15
+      timeoutSeconds: 2
+      failureThreshold: 3
+    readiness:
+      httpGet:
+        path: /ready
+      periodSeconds: 10
+      timeoutSeconds: 2
+      failureThreshold: 2
+
+# Subcharts disabled for testing
+atlassian-ce:
+  enabled: false
+
+ibm-docs-search:
+  enabled: false
+
+# Made with Bob
